@@ -451,18 +451,24 @@ function drawScene(c,W,H,v,dpr,objs=board.objs){drawZ=v.z*dpr;c.setTransform(dpr
  c.setTransform(dpr*v.z,0,0,dpr*v.z,-v.x*v.z*dpr,-v.y*v.z*dpr);const vb={x:v.x,y:v.y,w:W/v.z,h:H/v.z};
  drawPattern(c,vb,v.z,board.meta.tpl);
  for(const o of objs){if(o.id===editingId||erasing.has(o.id))continue;const b=bbox(o);if(b.x>vb.x+vb.w||b.y>vb.y+vb.h||b.x+b.w<vb.x||b.y+b.h<vb.y)continue;drawObj(c,o)}}
+function drawPartial(c,W,H,v,dpr,box){const m=3/v.z;let x0=box.x-m,y0=box.y-m,x1=box.x+box.w+m,y1=box.y+box.h+m;
+ const vx0=v.x,vy0=v.y,vx1=v.x+W/v.z,vy1=v.y+H/v.z;x0=Math.max(x0,vx0);y0=Math.max(y0,vy0);x1=Math.min(x1,vx1);y1=Math.min(y1,vy1);if(x1<=x0||y1<=y0)return;
+ drawZ=v.z*dpr;c.save();c.setTransform(dpr*v.z,0,0,dpr*v.z,-v.x*v.z*dpr,-v.y*v.z*dpr);c.beginPath();c.rect(x0,y0,x1-x0,y1-y0);c.clip();
+ c.fillStyle=paperColor();c.fillRect(x0,y0,x1-x0,y1-y0);const vb={x:x0,y:y0,w:x1-x0,h:y1-y0};drawPattern(c,vb,v.z,board.meta.tpl);
+ for(const o of board.objs){if(o.id===editingId||erasing.has(o.id))continue;const b=bbox(o);if(b.x>x1||b.y>y1||b.x+b.w<x0||b.y+b.h<y0)continue;drawObj(c,o)}c.restore()}
 /* ================= canvas & camera ================= */
-const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d',{desynchronized:true}),tctx=tp.getContext('2d',{desynchronized:true});
+const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d'),tctx=tp.getContext('2d');
 let W=0,H=0,DPR=1,stageRect={left:0,top:0};
 function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(2,window.devicePixelRatio||1);
  for(const c of[cv,lv,tp]){c.width=Math.round(W*DPR);c.height=Math.round(H*DPR)}if(live&&live.mode==='draw')live.drawn=0;layoutTray();requestRender()}
 new ResizeObserver(()=>{if(board)resize()}).observe(stage);
 const V=()=>board.view;
 const toWorld=(sx,sy)=>({x:sx/V().z+V().x,y:sy/V().z+V().y});
-let rafPending=false,lastZoomTxt='',lastBg='';
-function requestRender(){if(rafPending)return;rafPending=true;requestAnimationFrame(()=>{rafPending=false;if(!board)return;
+let rafPending=false,lastZoomTxt='',lastBg='',dirtyBox=null,fullDirty=false;
+function requestRender(box){if(box&&box.w!=null&&!fullDirty){if(dirtyBox){const x0=Math.min(dirtyBox.x,box.x),y0=Math.min(dirtyBox.y,box.y),x1=Math.max(dirtyBox.x+dirtyBox.w,box.x+box.w),y1=Math.max(dirtyBox.y+dirtyBox.h,box.y+box.h);dirtyBox={x:x0,y:y0,w:x1-x0,h:y1-y0}}else dirtyBox={...box}}else{fullDirty=true;dirtyBox=null}
+ if(rafPending)return;rafPending=true;requestAnimationFrame(()=>{rafPending=false;if(!board)return;const dbox=fullDirty?null:dirtyBox;fullDirty=false;dirtyBox=null;
  const bg=paperColor();if(bg!==lastBg){stage.style.background=bg;lastBg=bg}
- usePatches=true;try{drawScene(ctx,W,H,V(),DPR)}finally{usePatches=false}renderLive();updateSelUI();const zt=Math.round(V().z*100)+'%';if(zt!==lastZoomTxt){$('#zoomBtn').textContent=zt;lastZoomTxt=zt}scheduleHires()})}
+ usePatches=true;try{if(dbox)drawPartial(ctx,W,H,V(),DPR,dbox);else drawScene(ctx,W,H,V(),DPR)}finally{usePatches=false}renderLive();updateSelUI();const zt=Math.round(V().z*100)+'%';if(zt!==lastZoomTxt){$('#zoomBtn').textContent=zt;lastZoomTxt=zt}scheduleHires()})}
 function setZoomAt(z,sx,sy){const v=V(),w=toWorld(sx,sy);v.z=clamp(z,.03,10);v.x=w.x-sx/v.z;v.y=w.y-sy/v.z;requestRender();scheduleSave(false)}
 function fitContent(){const bb=unionBox(board.objs);const v=V();if(!bb){v.x=-W/2;v.y=-60;v.z=1;requestRender();return}
  const m=40,z=clamp(Math.min((W-2*m)/bb.w,(H-2*m-80)/bb.h),.03,2);v.z=z;v.x=bb.x+bb.w/2-W/2/z;v.y=bb.y+bb.h/2-(H-70)/2/z;requestRender();scheduleSave(false)}
@@ -477,9 +483,9 @@ function renderLive(){if(!board)return;clearC(tctx);const v=V();setT(tctx);drawZ
   if(L.mode==='draw'){
    if(L.snap)drawObj(tctx,L.snap);
    else if(L.obj.pen==='hl')drawStroke(tctx,L.obj,hlPath(L.obj));
-   else{const o=L.obj,nn=o.pts.length/3,a0=Math.max(0,L.drawn-8),g=geom(o,true,a0),stable=Math.max(0,nn-8);
-    if(stable>L.drawn){const p=new Path2D();emitRange(p,g,L.drawn-a0,stable-a0,L.drawn===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable}
-    const p2=new Path2D();emitRange(p2,g,L.drawn-a0,g.n-1,L.drawn===0,true);fillInk(tctx,o,p2);
+   else{const o=L.obj,nn=o.pts.length/3,TAIL=140,ov=o.pen==='pencil'?0:4;let lo=Math.max(0,L.drawn-ov),a0=Math.max(0,lo-8),g=geom(o,true,a0);
+    if(nn-L.drawn>TAIL*2){const stable=nn-TAIL;const p=new Path2D();emitRange(p,g,lo-a0,stable-a0,lo===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable;lo=Math.max(0,L.drawn-ov);a0=Math.max(0,lo-8);g=geom(o,true,a0)}
+    const p2=new Path2D();emitRange(p2,g,lo-a0,g.n-1,lo===0,true);fillInk(tctx,o,p2);
     if(L.pred&&L.pred.length&&g.n>1){const col=inkColor(o.color);tctx.save();tctx.strokeStyle=o.pen==='pencil'?pencilPattern(tctx,col):col;tctx.lineWidth=g.W[g.n-1];tctx.lineCap='round';tctx.lineJoin='round';tctx.beginPath();tctx.moveTo(g.X[g.n-1],g.Y[g.n-1]);for(const q of L.pred)tctx.lineTo(q.x,q.y);tctx.stroke();tctx.restore()}}}
   else if(L.obj)drawObj(tctx,L.obj);
   if(L.mode==='lasso'&&L.poly.length>2){tctx.save();tctx.setLineDash([6/v.z,5/v.z]);tctx.lineWidth=1.5/v.z;tctx.strokeStyle=L.col||'#2a46c4';tctx.fillStyle='rgba(42,70,196,.06)';tctx.beginPath();tctx.moveTo(L.poly[0],L.poly[1]);for(let i=2;i<L.poly.length;i+=2)tctx.lineTo(L.poly[i],L.poly[i+1]);tctx.closePath();tctx.fill();tctx.stroke();tctx.restore()}
@@ -587,8 +593,8 @@ function startTool(e){const p=sp(e),w=toWorld(p.x,p.y),tool=S.tool,ptype=e.point
   const obj={id:uid(),t:'stroke',pen:tool==='hl'?'hl':st.type,color:st.color,size:st.size/V().z,pts:[w.x,w.y,pressureOf(e,null,w)]};
   clearC(lctx);live={mode:'draw',ptr:e.pointerId,ptype,obj,last:{x:w.x,y:w.y,t:e.timeStamp},anchor:p,sp0:p,drawn:0};armHold();
   if(S.eraser.hold){live.startHold=setTimeout(()=>{const L=live;if(!L||L.mode!=='draw'||L.movedFar||L.snap)return;clearTimeout(L.hold);clearC(lctx);
-   live={mode:'erase',ptr:L.ptr,ptype:L.ptype,cur:L.last,fromHold:true};beginErase();eraseAt(L.last);try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}requestRender()},500)}}
- else if(tool==='eraser'){live={mode:'erase',ptr:e.pointerId,ptype,cur:w};beginErase();eraseAt(w);requestRender()}
+   live={mode:'erase',ptr:L.ptr,ptype:L.ptype,cur:L.last,fromHold:true};beginErase();eraseAt(L.last);try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}requestLive()},500)}}
+ else if(tool==='eraser'){live={mode:'erase',ptr:e.pointerId,ptype,cur:w};beginErase();eraseAt(w)}
  else if(tool==='lasso'){if(sel.length)clearSel();live={mode:'lasso',ptr:e.pointerId,ptype,poly:[w.x,w.y],start:p,col:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}}
  else if(tool==='shape'){live={mode:'shape',ptr:e.pointerId,ptype,start:w,obj:null}}
  else if(tool==='tape'){live={mode:'tape',ptr:e.pointerId,ptype,start:w,sp:p,obj:null}}
@@ -616,15 +622,19 @@ function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents()
   else if(L.mode==='tape'){const x=Math.min(L.start.x,w.x),y=Math.min(L.start.y,w.y);L.obj={id:'live',t:'tape',x,y,w:Math.abs(w.x-L.start.x),h:Math.abs(w.y-L.start.y),color:S.tape.color,hidden:true}}
   else if(L.mode==='laser'){laserPts.push({x:w.x,y:w.y,t:performance.now()})}}
  if(L.mode==='draw'&&!L.snap&&S.tool!=='hl'){const arr=[];if(L.rawPt)arr.push(L.rawPt);if(e.getPredictedEvents){for(const pv of e.getPredictedEvents().slice(0,3)){const q=sp(pv);arr.push(toWorld(q.x,q.y))}}L.pred=arr}
- if(L.mode==='erase')requestRender();requestLive()}
+ requestLive()}
 function makeShape(kind,a,b){const base={id:uid(),t:'shape',kind,color:S.shape.color,size:S.shape.size/V().z};
  if(kind==='line'||kind==='arrow')return{...base,pts:[a.x,a.y,b.x,b.y]};return{...base,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
-function eraseAt(w){const r=S.eraser.size/2/V().z;
- if(S.eraser.mode!=='part'){for(const o of board.objs){if(erasing.has(o.id))continue;if((o.t==='stroke'||o.t==='shape')&&hitStroke(o,w.x,w.y,r))erasing.add(o.id)}return}
+function eraseAt(w){const L=live,prev=L&&L.ePrev;L.ePrev=w;const r=S.eraser.size/2/V().z;
+ if(!prev){eraseOne(w,r);return}
+ const d=Math.hypot(w.x-prev.x,w.y-prev.y),n=Math.min(40,Math.max(1,Math.ceil(d/(r*.6))));for(let i=1;i<=n;i++){const t=i/n;eraseOne({x:prev.x+(w.x-prev.x)*t,y:prev.y+(w.y-prev.y)*t},r)}}
+function padBox(b,o){const m=(o.size||0)*1.5+2;return{x:b.x-m,y:b.y-m,w:b.w+2*m,h:b.h+2*m}}
+function eraseOne(w,r){
+ if(S.eraser.mode!=='part'){for(const o of board.objs){if(erasing.has(o.id))continue;if((o.t==='stroke'||o.t==='shape')&&hitStroke(o,w.x,w.y,r)){erasing.add(o.id);requestRender(padBox(bbox(o),o))}}return}
  const L=live;for(let i=board.objs.length-1;i>=0;i--){const o=board.objs[i];if(o.t!=='stroke'&&o.t!=='shape')continue;if(!hitStroke(o,w.x,w.y,r))continue;
   const rec=()=>{if(L.added.has(o.id))L.added.delete(o.id);else L.removed.set(o.id,{obj:o,idx:i})};
-  if(o.t==='shape'){rec();board.objs.splice(i,1);continue}
-  const pieces=clipStroke(o,w.x,w.y,r+o.size*.3);if(!pieces)continue;rec();const objs=pieces.map(pt=>({...o,id:uid(),pts:pt}));board.objs.splice(i,1,...objs);objs.forEach(q=>L.added.set(q.id,q))}}
+  if(o.t==='shape'){const bb=padBox(bbox(o),o);rec();board.objs.splice(i,1);requestRender(bb);continue}
+  const pieces=clipStroke(o,w.x,w.y,r+o.size*.3);if(!pieces)continue;const bb=padBox(bbox(o),o);rec();const objs=pieces.map(pt=>({...o,id:uid(),pts:pt}));board.objs.splice(i,1,...objs);objs.forEach(q=>L.added.set(q.id,q));requestRender(bb)}}
 function clipStroke(o,cx,cy,rr){const P=o.pts,n=P.length/3,r2=rr*rr,out=[];let cur=[],touched=false;
  const ins=(x,y)=>(x-cx)*(x-cx)+(y-cy)*(y-cy)<r2,flush=()=>{if(cur.length>=6)out.push(cur);cur=[]};
  let ax=P[0],ay=P[1],ap=P[2],ain=ins(ax,ay);if(n===1)return ain?[]:null;if(!ain)cur.push(ax,ay,ap);else touched=true;
