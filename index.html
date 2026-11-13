@@ -240,7 +240,7 @@ exportPng:'تصدير صورة PNG',exportPdf:'تصدير PDF',backup:'حفظ ن
 langName:'English',delete:'حذف',duplicate:'نسخ',front:'للأمام',toBack:'للخلف',edit:'تعديل',recolor:'تغيير اللون',
 rename:'إعادة تسمية',renameTitle:'اسم الدفتر',deleteTitle:'حذف الدفتر؟',deleteBody:'سيُحذف "{n}" نهائياً من هذا الجهاز.',cancel:'إلغاء',create:'إنشاء',save:'حفظ',
 newTitle:'دفتر جديد',nameLbl:'الاسم',defaultName:'دفتر جديد',
-pdfLoading:'جاري تجهيز الصفحة {a} من {b}',pdfFail:'تعذّر فتح ملف PDF',imgFail:'تعذّر فتح الصورة',saved:'تم التصدير',exportFail:'تعذّر التصدير هنا',
+pdfLoading:'جاري تجهيز الصفحة {a} من {b}',pdfFail:'تعذّر فتح ملف PDF',imgFail:'تعذّر فتح الصورة',saved:'تم التصدير',backupReady:'النسخة جاهزة',shareSave:'حفظ / مشاركة',dlBtn:'تنزيل الملف',dlLink:'أو اضغط هنا لتنزيل الملف مباشرة',dlHint:'على الآيباد اختر «حفظ في الملفات» من القائمة اللي تظهر.',exportFail:'تعذّر التصدير هنا',
 imported:'تم الاستيراد',importFail:'الملف ليس نسخة احتياطية من دفتر',preparing:'جاري التجهيز…',emptyBoard:'الدفتر فاضي، اكتب شي أول',
 justNow:'الآن',moveBar:'اسحب لتحريك الشريط، ونقرتين تردّه مكانه',smooth:'نعومة الخط',pressure:'حساسية الضغط',pressOff:'ثابتة',pressLight:'خفيفة',pressNormal:'عادية',pressFirm:'قوية',favs:'أقلام مفضلة',favSaved:'تم حفظ القلم',favSlot:'خانة {n}',favHint:'اضغط خانة فاضية لحفظ القلم الحالي، واضغط مطوّلاً على أي خانة لاستبدالها.',undone:'تم التراجع',twoFinger:'نقرة بإصبعين = تراجع',undoBtnHint:'للتراجع عن إضافة ملف استخدم زر التراجع فوق',saveFail:'تعذّر الحفظ: مساحة التخزين ممتلئة. احفظ نسخة احتياطية واحذف دفاتر ما تحتاجها.',noStorage:'التخزين غير متاح في هذا المتصفح، والدفاتر ما راح تنحفظ بعد الإغلاق.',busy:'انتظر لين يخلص تجهيز الملف',optimizing:'جاري تحسين الدفتر…',sticky:'اكتب ملاحظتك…'},
 en:{appName:'Daftar',search:'Search notebooks',newNotebook:'New notebook',localNote:'All notebooks are stored on this device only, offline.',count:'{n} notebooks',empty:'No notebooks match that name.',
@@ -259,7 +259,7 @@ exportPng:'Export PNG image',exportPdf:'Export PDF',backup:'Save backup',penOnly
 langName:'العربية',delete:'Delete',duplicate:'Duplicate',front:'Bring forward',toBack:'Send back',edit:'Edit',recolor:'Color',
 rename:'Rename',renameTitle:'Notebook name',deleteTitle:'Delete notebook?',deleteBody:'"{n}" will be removed from this device for good.',cancel:'Cancel',create:'Create',save:'Save',
 newTitle:'New notebook',nameLbl:'Name',defaultName:'New notebook',
-pdfLoading:'Preparing page {a} of {b}',pdfFail:'Could not open this PDF',imgFail:'Could not open the image',saved:'Exported',exportFail:'Export is not available here',
+pdfLoading:'Preparing page {a} of {b}',pdfFail:'Could not open this PDF',imgFail:'Could not open the image',saved:'Exported',backupReady:'Backup ready',shareSave:'Save / Share',dlBtn:'Download file',dlLink:'Or tap here to download directly',dlHint:'On iPad choose “Save to Files” from the sheet that appears.',exportFail:'Export is not available here',
 imported:'Imported',importFail:'That file is not a Daftar backup',preparing:'Preparing…',emptyBoard:'This notebook is empty',
 justNow:'Just now',moveBar:'Drag to move the toolbar, double-tap to reset',smooth:'Line smoothing',pressure:'Pressure sensitivity',pressOff:'Fixed',pressLight:'Light',pressNormal:'Normal',pressFirm:'Firm',favs:'Favorite pens',favSaved:'Pen saved',favSlot:'Slot {n}',favHint:'Tap an empty slot to save the current pen; long-press any slot to replace it.',undone:'Undone',twoFinger:'Two-finger tap = undo',undoBtnHint:'To undo adding a file, use the Undo button above',saveFail:'Could not save: storage is full. Save a backup and delete notebooks you no longer need.',noStorage:'Storage is not available in this browser; notebooks will not be kept after closing.',busy:'Wait until the file is ready',optimizing:'Optimizing notebook…',sticky:'Type your note…'}};
 let lang=LS.get('lang','ar');
@@ -763,7 +763,15 @@ $('#filePdf').addEventListener('change',async e=>{const f=e.target.files[0];e.ta
 /* ================= export ================= */
 async function offerFile(name,blob){try{const d=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
   if(d){try{await d.save({filename:name,data:blob});toast(t('saved'));return}catch(err){if(err&&err.code==='declined')return;if(err&&err.code==='rate_limited'){toast(t('exportFail'));return}}}}catch(e){}
- try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000)}catch(e){toast(t('exportFail'))}}
+ const url=URL.createObjectURL(blob),file=(()=>{try{return new File([blob],name,{type:blob.type||'application/octet-stream'})}catch(e){return null}})();
+ const canShare=!!(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}));
+ const body=document.createElement('div');body.style.cssText='display:flex;flex-direction:column;gap:10px';
+ const p=document.createElement('p');p.style.cssText='margin:0;color:var(--muted)';p.textContent=name+' · '+(blob.size/1048576).toFixed(1)+' MB';body.appendChild(p);
+ const link=document.createElement('a');link.href=url;link.download=name;link.textContent=t('dlLink');link.style.cssText='color:var(--accent);font-weight:600';body.appendChild(link);
+ const h=document.createElement('p');h.style.cssText='margin:0;color:var(--muted);font-size:13px';h.textContent=t('dlHint');body.appendChild(h);
+ modal(t('backupReady'),body,[[t('cancel'),'ghost'],[canShare?t('shareSave'):t('dlBtn'),'primary',async()=>{
+  if(canShare){try{await navigator.share({files:[file],title:name});toast(t('saved'));return true}catch(e){if(e&&e.name==='AbortError')return false}}
+  try{link.click();toast(t('saved'))}catch(e){toast(t('exportFail'))}return true}]])}
 const fname=ext=>(board.meta.name||'daftar').replace(/[\\/:*?"<>|]+/g,' ').trim()+'.'+ext;
 const overlaps=(a,b)=>!(a.x>b.x+b.w||a.y>b.y+b.h||a.x+a.w<b.x||a.y+a.h<b.y);
 async function preload(objs,scale,region){for(const o of objs)if(o.t==='image'&&o.asset&&(!region||overlaps(bbox(o),region))){if(o.w*scale>SMALL_W*1.15)await ensureFull(o.asset);else await ensureSmall(o.asset)}}
