@@ -1,6 +1,6 @@
 // Daftar service worker: works offline after the first visit.
 // When you change index.html, bump the version below so devices pick up the update.
-const CACHE = 'daftar-v7';
+const CACHE = 'daftar-v8';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './icon-maskable-512.png'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',

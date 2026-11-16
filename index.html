@@ -366,22 +366,28 @@ function widthAt(o,p,ang){const s=o.size;switch(o.pen){
  case 'ball':return s*(.72+.5*p);case 'fountain':return s*(.32+1.35*p);case 'brush':return s*(.15+2.2*Math.pow(p,1.25));
  case 'pencil':return s*(.55+.6*p);case 'calli':return s*(.16+1.9*Math.abs(Math.sin(ang+Math.PI/3)))*(.65+.5*p);default:return s}}
 function geom(o,live,a0=0){const P=o.pts,N=P.length/3,n=N-a0,X=new Float64Array(n),Y=new Float64Array(n),W=new Float64Array(n);
- for(let j=0;j<n;j++){const i=j+a0,a=Math.max(a0,i-1),b=Math.min(N-1,i+1);X[j]=(P[a*3]+2*P[i*3]+P[b*3])/4;Y[j]=(P[a*3+1]+2*P[i*3+1]+P[b*3+1])/4}
- if(a0===0){X[0]=P[0];Y[0]=P[1]}if(n>1){X[n-1]=P[(N-1)*3];Y[n-1]=P[(N-1)*3+1]}
+ for(let j=0;j<n;j++){const i=(j+a0)*3;X[j]=P[i];Y[j]=P[i+1]}
  for(let j=0;j<n;j++){const a=Math.max(0,j-1),b=Math.min(n-1,j+1);W[j]=widthAt(o,P[(j+a0)*3+2],Math.atan2(Y[b]-Y[a],X[b]-X[a]))}
  for(let k=0;k<2;k++)for(let j=1;j<n-1;j++)W[j]=(W[j-1]+2*W[j]+W[j+1])/4;
- if(a0===0&&(o.pen==='fountain'||o.pen==='brush')){const tl=live?6:Math.min(6,Math.floor(n/3));for(let i=0;i<tl&&i<n;i++){const f=.35+.65*(i/tl);W[i]*=f;if(!live)W[n-1-i]*=f}}
+ if(a0===0&&(o.pen==='fountain'||o.pen==='brush')){const tl=6;for(let i=0;i<tl&&i<n;i++)W[i]*=.35+.65*(i/tl)}
  return{X,Y,W,n}}
-function crPt(X,Y,n,i,t){const a=Math.max(0,i-1),c=Math.min(n-1,i+1),d=Math.min(n-1,i+2),t2=t*t,t3=t2*t;
- const ax=X[a],bx=X[i],cx=X[c],dx=X[d],ay=Y[a],by=Y[i],cy=Y[c],dy=Y[d];
- const k1x=-ax+cx,k2x=2*ax-5*bx+4*cx-dx,k3x=-ax+3*bx-3*cx+dx,k1y=-ay+cy,k2y=2*ay-5*by+4*cy-dy,k3y=-ay+3*by-3*cy+dy;
- return[.5*(2*bx+k1x*t+k2x*t2+k3x*t3),.5*(2*by+k1y*t+k2y*t2+k3y*t3),.5*(k1x+2*k2x*t+3*k3x*t2),.5*(k1y+2*k2y*t+3*k3y*t2)]}
+/* centripetal Catmull-Rom (alpha=.5) as a cubic Bezier: no cusps or overshoot when point spacing is uneven */
+const BZ=new Float64Array(8);
+function crSeg(X,Y,n,i){const i0=Math.max(0,i-1),i3=Math.min(n-1,i+2),x0=X[i0],y0=Y[i0],x1=X[i],y1=Y[i],x2=X[i+1],y2=Y[i+1],x3=X[i3],y3=Y[i3];
+ const d1=Math.sqrt(Math.hypot(x1-x0,y1-y0)),d2=Math.sqrt(Math.hypot(x2-x1,y2-y1)),d3=Math.sqrt(Math.hypot(x3-x2,y3-y2));
+ let bx1,by1,bx2,by2;
+ if(d2<1e-6){bx1=x1;by1=y1;bx2=x2;by2=y2}
+ else{if(d1<1e-6){bx1=x1+(x2-x1)/3;by1=y1+(y2-y1)/3}else{const a=d1*d1,b=d2*d2,c=2*a+3*d1*d2+b,e=3*d1*(d1+d2);bx1=(a*x2-b*x0+c*x1)/e;by1=(a*y2-b*y0+c*y1)/e}
+  if(d3<1e-6){bx2=x2-(x2-x1)/3;by2=y2-(y2-y1)/3}else{const a=d3*d3,b=d2*d2,c=2*a+3*d3*d2+b,e=3*d3*(d3+d2);bx2=(a*x1-b*x3+c*x2)/e;by2=(a*y1-b*y3+c*y2)/e}}
+ BZ[0]=x1;BZ[1]=y1;BZ[2]=bx1;BZ[3]=by1;BZ[4]=bx2;BZ[5]=by2;BZ[6]=x2;BZ[7]=y2}
+function crPt(X,Y,n,i,t){const B=BZ,u=1-t,a=u*u*u,b=3*u*u*t,c=3*u*t*t,d=t*t*t;
+ return[a*B[0]+b*B[2]+c*B[4]+d*B[6],a*B[1]+b*B[3]+c*B[5]+d*B[7],3*(u*u*(B[2]-B[0])+2*u*t*(B[4]-B[2])+t*t*(B[6]-B[4])),3*(u*u*(B[3]-B[1])+2*u*t*(B[5]-B[3])+t*t*(B[7]-B[5]))]}
 function emitRange(path,g,i0,i1,capS,capE){const{X,Y,W,n}=g;
  const circ=(x,y,r)=>{r=Math.max(.3,r);path.moveTo(x+r,y);path.arc(x,y,r,0,Math.PI*2,true)};
  if(n===1){circ(X[0],Y[0],W[0]/2);return}
  if(capS)circ(X[i0],Y[i0],W[i0]/2);
  let px=0,py=0,pnx=0,pny=0,pw=0,has=false;
- for(let i=i0;i<i1;i++){const d=Math.hypot(X[i+1]-X[i],Y[i+1]-Y[i]),k=Math.max(1,Math.min(14,Math.ceil(Math.max(d/2,d*drawZ/2.5))));
+ for(let i=i0;i<i1;i++){const d=Math.hypot(X[i+1]-X[i],Y[i+1]-Y[i]),k=Math.max(1,Math.min(16,Math.ceil(Math.max(d/2,d*drawZ/2))));crSeg(X,Y,n,i);
   for(let s2=has?1:0;s2<=k;s2++){const tt=s2/k,q=crPt(X,Y,n,i,tt),l=Math.hypot(q[2],q[3]);let nx=pnx,ny=pny;if(l>1e-6){nx=-q[3]/l;ny=q[2]/l}
    const w=(W[i]+(W[i+1]-W[i])*tt)/2;
    if(has){if(nx*pnx+ny*pny<0){circ(px,py,pw);circ(q[0],q[1],w)}
@@ -459,7 +465,7 @@ function drawPartial(c,W,H,v,dpr,box){const m=3/v.z;let x0=box.x-m,y0=box.y-m,x1
 /* ================= canvas & camera ================= */
 const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d',{desynchronized:true}),tctx=tp.getContext('2d',{desynchronized:true});
 let W=0,H=0,DPR=1,stageRect={left:0,top:0};
-function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(2,window.devicePixelRatio||1);
+function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(3,window.devicePixelRatio||1);
  for(const c of[cv,lv,tp]){c.width=Math.round(W*DPR);c.height=Math.round(H*DPR)}if(live&&live.mode==='draw')live.drawn=0;layoutTray();requestRender()}
 new ResizeObserver(()=>{if(board)resize()}).observe(stage);
 const V=()=>board.view;
@@ -483,10 +489,10 @@ function renderLive(){if(!board)return;clearC(tctx);const v=V();setT(tctx);drawZ
   if(L.mode==='draw'){
    if(L.snap)drawObj(tctx,L.snap);
    else if(L.obj.pen==='hl')drawStroke(tctx,L.obj,hlPath(L.obj));
-   else{const o=L.obj,nn=o.pts.length/3,TAIL=28,ov=o.pen==='pencil'?0:4;let lo=Math.max(0,L.drawn-ov),a0=Math.max(0,lo-8),g=geom(o,true,a0);
-    if(nn-L.drawn>TAIL+24){const stable=nn-TAIL;const p=new Path2D();emitRange(p,g,lo-a0,stable-a0,lo===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable;lo=Math.max(0,L.drawn-ov);a0=Math.max(0,lo-8);g=geom(o,true,a0)}
-    const p2=new Path2D();emitRange(p2,g,lo-a0,g.n-1,lo===0,true);fillInk(tctx,o,p2);
-    if(L.pred&&L.pred.length&&g.n>1){const col=inkColor(o.color);tctx.save();tctx.strokeStyle=o.pen==='pencil'?pencilPattern(tctx,col):col;tctx.lineWidth=g.W[g.n-1];tctx.lineCap='round';tctx.lineJoin='round';tctx.beginPath();tctx.moveTo(g.X[g.n-1],g.Y[g.n-1]);for(const q of L.pred)tctx.lineTo(q.x,q.y);tctx.stroke();tctx.restore()}}}
+   else{const o=L.obj,P=o.pts,base=P.length,rn=base/3,TAIL=28,ov=o.pen==='pencil'?0:4;let lo=Math.max(0,L.drawn-ov),a0=Math.max(0,lo-8);
+    if(rn-L.drawn>TAIL+24){const stable=rn-TAIL,g=geom(o,true,a0),p=new Path2D();emitRange(p,g,lo-a0,stable-a0,lo===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable;lo=Math.max(0,L.drawn-ov);a0=Math.max(0,lo-8)}
+    if(L.pred&&L.pred.length){let lx=P[base-3],ly=P[base-2];const lw=P[base-1];for(const q of L.pred){if(Math.hypot(q.x-lx,q.y-ly)*v.z>.3){P.push(q.x,q.y,lw);lx=q.x;ly=q.y}}}
+    try{const g=geom(o,true,a0),p2=new Path2D();emitRange(p2,g,lo-a0,g.n-1,lo===0,true);fillInk(tctx,o,p2)}finally{P.length=base}}}
   else if(L.obj)drawObj(tctx,L.obj);
   if(L.mode==='lasso'&&L.poly.length>2){tctx.save();tctx.setLineDash([6/v.z,5/v.z]);tctx.lineWidth=1.5/v.z;tctx.strokeStyle=L.col||'#2a46c4';tctx.fillStyle='rgba(42,70,196,.06)';tctx.beginPath();tctx.moveTo(L.poly[0],L.poly[1]);for(let i=2;i<L.poly.length;i+=2)tctx.lineTo(L.poly[i],L.poly[i+1]);tctx.closePath();tctx.fill();tctx.stroke();tctx.restore()}
   if(L.mode==='erase'&&L.cur){tctx.save();tctx.lineWidth=1.2/v.z;tctx.strokeStyle='rgba(120,130,150,.9)';tctx.fillStyle='rgba(120,130,150,.12)';tctx.beginPath();tctx.arc(L.cur.x,L.cur.y,S.eraser.size/2/v.z,0,Math.PI*2);tctx.fill();tctx.stroke();tctx.restore()}}
@@ -604,10 +610,10 @@ function startTool(e){const p=sp(e),w=toWorld(p.x,p.y),tool=S.tool,ptype=e.point
  else if(tool==='text'){live={mode:'text',ptr:e.pointerId,ptype,start:w,sp:p}}
  else if(tool==='laser'){live={mode:'laser',ptr:e.pointerId,ptype};laserPts.push({x:w.x,y:w.y,t:performance.now(),brk:true});if(!laserRaf)laserRaf=requestAnimationFrame(laserLoop)}
  requestLive()}
-function armHold(){clearTimeout(live.hold);live.hold=setTimeout(()=>{const L=live;if(!L||L.mode!=='draw'||L.snap)return;const o=L.obj,n=o.pts.length/3;if(n<4)return;
+function armHold(){clearTimeout(live.hold);live.hold=setTimeout(()=>{const L=live;if(!L||L.mode!=='draw'||L.snap)return;const o=L.obj,n=o.pts.length/3;if(n<4)return;{const P=o.pts;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let i=0;i<P.length;i+=3){x0=Math.min(x0,P[i]);x1=Math.max(x1,P[i]);y0=Math.min(y0,P[i+1]);y1=Math.max(y1,P[i+1])}if(Math.max(x1-x0,y1-y0)*V().z<56)return}
  if(o.pen==='hl'){const P=o.pts;L.snap={...o,pts:[P[0],P[1],.5,P[(n-1)*3],P[(n-1)*3+1],.5]};L.snapLine=true}
  else{const s=recognize(o.pts,o.color,Math.max(1.2,o.size*.9));if(s){L.snap=s;L.snapLine=s.kind==='line'}}
- if(L.snap){clearC(lctx);requestLive()}},650)}
+ if(L.snap){clearC(lctx);requestLive()}},800)}
 function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents():[],list=co.length?co:[e];
  for(const ev of list){const p=sp(ev),w=toWorld(p.x,p.y);
   if(L.mode==='draw'){
@@ -615,16 +621,18 @@ function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents()
    if(L.snap){if(L.snapLine){if(L.snap.t==='shape')L.snap={...L.snap,pts:[L.snap.pts[0],L.snap.pts[1],w.x,w.y]};else L.snap={...L.snap,pts:[L.snap.pts[0],L.snap.pts[1],.5,w.x,w.y,.5]}}continue}
    const last=L.last,z=V().z;if(Math.hypot(w.x-last.x,w.y-last.y)*z<.5)continue;const P=L.obj.pts;
    if(S.tool==='hl'){if(S.hl.straight)L.obj.pts=[P[0],P[1],.5,w.x,w.y,.5];else P.push(w.x,w.y,.5)}
-   else{const st=S.pen,rawPr=pressureOf(ev,last,w),kp=.3+st.smooth*.004,pr=P[P.length-1]*kp+rawPr*(1-kp);
-    const sm=L.sm||(L.sm={x:P[0],y:P[1]}),sd=Math.hypot(w.x-sm.x,w.y-sm.y)*z,base=1-st.smooth*.009,a=clamp(base+sd*.03,base,1);
-    sm.x+=(w.x-sm.x)*a;sm.y+=(w.y-sm.y)*a;const m=P.length;if(Math.hypot(sm.x-P[m-3],sm.y-P[m-2])*z>=.3)P.push(sm.x,sm.y,pr)}
-   L.last={x:w.x,y:w.y,t:ev.timeStamp};L.rawPt={x:w.x,y:w.y};if(Math.hypot(p.x-L.anchor.x,p.y-L.anchor.y)>4){L.anchor=p;armHold()}}
+   else{const st=S.pen,rawPr=pressureOf(ev,last,w),dtm=Math.max(1,ev.timeStamp-last.t),kp=Math.exp(-dtm/(6+st.smooth*.12)),pr=P[P.length-1]*kp+rawPr*(1-kp);
+    const f=L.f||(L.f={x:P[0],y:P[1],dx:0,dy:0,t:last.t}),dt=Math.max(.001,(ev.timeStamp-f.t)/1000);f.t=ev.timeStamp;
+    const al=fc=>1/(1+1/(2*Math.PI*fc*dt)),rdx=(w.x-f.x)/dt,rdy=(w.y-f.y)/dt,ad=al(1.2);f.dx+=(rdx-f.dx)*ad;f.dy+=(rdy-f.dy)*ad;
+    const a=al(Math.max(.6,9-st.smooth*.08)+.03*Math.hypot(f.dx,f.dy)*z);f.x+=(w.x-f.x)*a;f.y+=(w.y-f.y)*a;
+    const m=P.length;if(Math.hypot(f.x-P[m-3],f.y-P[m-2])*z>=.35)P.push(f.x,f.y,pr)}
+   L.last={x:w.x,y:w.y,t:ev.timeStamp};L.rawPt={x:w.x,y:w.y};if(Math.hypot(p.x-L.anchor.x,p.y-L.anchor.y)>3){L.anchor=p;armHold()}}
   else if(L.mode==='erase'){L.cur=w;eraseAt(w)}
   else if(L.mode==='lasso'){L.poly.push(w.x,w.y)}
   else if(L.mode==='shape'){L.obj=makeShape(S.shape.kind,L.start,w)}
   else if(L.mode==='tape'){const x=Math.min(L.start.x,w.x),y=Math.min(L.start.y,w.y);L.obj={id:'live',t:'tape',x,y,w:Math.abs(w.x-L.start.x),h:Math.abs(w.y-L.start.y),color:S.tape.color,hidden:true}}
   else if(L.mode==='laser'){laserPts.push({x:w.x,y:w.y,t:performance.now()})}}
- if(L.mode==='draw'&&!L.snap&&S.tool!=='hl'){const arr=[];if(L.rawPt)arr.push(L.rawPt);if(e.getPredictedEvents){for(const pv of e.getPredictedEvents().slice(0,3)){const q=sp(pv);arr.push(toWorld(q.x,q.y))}}L.pred=arr}
+ if(L.mode==='draw'&&!L.snap&&S.tool!=='hl'){const arr=[];if(L.rawPt)arr.push(L.rawPt);if(e.getPredictedEvents){for(const pv of e.getPredictedEvents().slice(0,2)){const q=sp(pv);arr.push(toWorld(q.x,q.y))}}L.pred=arr}
  requestLive()}
 function makeShape(kind,a,b){const base={id:uid(),t:'shape',kind,color:S.shape.color,size:S.shape.size/V().z};
  if(kind==='line'||kind==='arrow')return{...base,pts:[a.x,a.y,b.x,b.y]};return{...base,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
