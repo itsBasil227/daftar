@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Daftar">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&family=Cairo:wght@400;700&family=Tajawal:wght@400;700&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Inter:wght@400;700&family=Caveat:wght@500;700&family=Merriweather:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&family=Cairo:wght@400;700&family=Tajawal:wght@400;700&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Inter:wght@400;700&family=Caveat:wght@500;700&family=Merriweather:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&family=Cairo:wght@400;700&family=Tajawal:wght@400;700&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Inter:wght@400;700&family=Caveat:wght@500;700&family=Merriweather:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap"></noscript>
 <style>
 /* Layout: a library of notebooks, then a full-bleed paper stage with a floating pen tray at the bottom. */
 :root{
@@ -381,7 +381,7 @@ function emitRange(path,g,i0,i1,capS,capE){const{X,Y,W,n}=g;
  if(n===1){circ(X[0],Y[0],W[0]/2);return}
  if(capS)circ(X[i0],Y[i0],W[i0]/2);
  let px=0,py=0,pnx=0,pny=0,pw=0,has=false;
- for(let i=i0;i<i1;i++){const d=Math.hypot(X[i+1]-X[i],Y[i+1]-Y[i]),k=Math.max(1,Math.min(10,Math.ceil(d/2)));
+ for(let i=i0;i<i1;i++){const d=Math.hypot(X[i+1]-X[i],Y[i+1]-Y[i]),k=Math.max(1,Math.min(14,Math.ceil(Math.max(d/2,d*drawZ/2.5))));
   for(let s2=has?1:0;s2<=k;s2++){const tt=s2/k,q=crPt(X,Y,n,i,tt),l=Math.hypot(q[2],q[3]);let nx=pnx,ny=pny;if(l>1e-6){nx=-q[3]/l;ny=q[2]/l}
    const w=(W[i]+(W[i+1]-W[i])*tt)/2;
    if(has){if(nx*pnx+ny*pny<0){circ(px,py,pw);circ(q[0],q[1],w)}
@@ -457,7 +457,7 @@ function drawPartial(c,W,H,v,dpr,box){const m=3/v.z;let x0=box.x-m,y0=box.y-m,x1
  c.fillStyle=paperColor();c.fillRect(x0,y0,x1-x0,y1-y0);const vb={x:x0,y:y0,w:x1-x0,h:y1-y0};drawPattern(c,vb,v.z,board.meta.tpl);
  for(const o of board.objs){if(o.id===editingId||erasing.has(o.id))continue;const b=bbox(o);if(b.x>x1||b.y>y1||b.x+b.w<x0||b.y+b.h<y0)continue;drawObj(c,o)}c.restore()}
 /* ================= canvas & camera ================= */
-const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d'),tctx=tp.getContext('2d');
+const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d',{desynchronized:true}),tctx=tp.getContext('2d',{desynchronized:true});
 let W=0,H=0,DPR=1,stageRect={left:0,top:0};
 function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(2,window.devicePixelRatio||1);
  for(const c of[cv,lv,tp]){c.width=Math.round(W*DPR);c.height=Math.round(H*DPR)}if(live&&live.mode==='draw')live.drawn=0;layoutTray();requestRender()}
@@ -483,8 +483,8 @@ function renderLive(){if(!board)return;clearC(tctx);const v=V();setT(tctx);drawZ
   if(L.mode==='draw'){
    if(L.snap)drawObj(tctx,L.snap);
    else if(L.obj.pen==='hl')drawStroke(tctx,L.obj,hlPath(L.obj));
-   else{const o=L.obj,nn=o.pts.length/3,TAIL=140,ov=o.pen==='pencil'?0:4;let lo=Math.max(0,L.drawn-ov),a0=Math.max(0,lo-8),g=geom(o,true,a0);
-    if(nn-L.drawn>TAIL*2){const stable=nn-TAIL;const p=new Path2D();emitRange(p,g,lo-a0,stable-a0,lo===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable;lo=Math.max(0,L.drawn-ov);a0=Math.max(0,lo-8);g=geom(o,true,a0)}
+   else{const o=L.obj,nn=o.pts.length/3,TAIL=28,ov=o.pen==='pencil'?0:4;let lo=Math.max(0,L.drawn-ov),a0=Math.max(0,lo-8),g=geom(o,true,a0);
+    if(nn-L.drawn>TAIL+24){const stable=nn-TAIL;const p=new Path2D();emitRange(p,g,lo-a0,stable-a0,lo===0,false);setT(lctx);fillInk(lctx,o,p);L.drawn=stable;lo=Math.max(0,L.drawn-ov);a0=Math.max(0,lo-8);g=geom(o,true,a0)}
     const p2=new Path2D();emitRange(p2,g,lo-a0,g.n-1,lo===0,true);fillInk(tctx,o,p2);
     if(L.pred&&L.pred.length&&g.n>1){const col=inkColor(o.color);tctx.save();tctx.strokeStyle=o.pen==='pencil'?pencilPattern(tctx,col):col;tctx.lineWidth=g.W[g.n-1];tctx.lineCap='round';tctx.lineJoin='round';tctx.beginPath();tctx.moveTo(g.X[g.n-1],g.Y[g.n-1]);for(const q of L.pred)tctx.lineTo(q.x,q.y);tctx.stroke();tctx.restore()}}}
   else if(L.obj)drawObj(tctx,L.obj);
@@ -512,8 +512,11 @@ function modObjs(before,after){const m=new Map(after.map(o=>[o.id,o]));board.obj
 
 /* ================= saving ================= */
 let saveTimer=0,thumbDirty=false,dataDirty=false,lastThumb=0,busy=false,opening=false;
-function scheduleSave(content){if(!board)return;if(content){thumbDirty=true;dataDirty=true;board.meta.updated=Date.now()}clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow(false),content?1000:1500)}
-async function saveNow(final){if(!board)return;clearTimeout(saveTimer);const b=board;
+function scheduleSave(content){if(!board)return;if(content){thumbDirty=true;dataDirty=true;board.meta.updated=Date.now()}clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow(false,true),content?1000:1500)}
+async function saveNow(final,lazy){if(!board)return;clearTimeout(saveTimer);
+ if(lazy){if(live||gesture||selDrag){saveTimer=setTimeout(()=>saveNow(false,true),700);return}
+  if(window.requestIdleCallback){requestIdleCallback(()=>{if(board&&!live&&!gesture&&!selDrag)saveNow(false);else scheduleSave(false)},{timeout:1500});return}}
+ const b=board;
  if(thumbDirty&&(final||Date.now()-lastThumb>25000)){b.meta.thumb=makeThumb();thumbDirty=false;lastThumb=Date.now()}
  b.meta.view={x:b.view.x,y:b.view.y,z:b.view.z};const wasDirty=dataDirty;dataDirty=false;
  const ok=await DB.put({...b.meta},wasDirty?{id:b.meta.id,objs:b.objs}:null);if(!ok&&wasDirty&&board===b)dataDirty=true}
@@ -1008,7 +1011,7 @@ if('serviceWorker' in navigator&&document.querySelector('link[rel="manifest"]'))
  // refresh sample thumbnail once fonts are in
  document.fonts&&document.fonts.ready.then(async()=>{fontEpoch++;requestRender();const ms=await DB.metas();for(const m of ms)if(!m.thumb){const d=await DB.data(m.id);m.thumb=thumbFor(m,(d&&d.objs)||[]);await DB.put(m)}if(!board)renderLibrary()});
  if(document.fonts)document.fonts.onloadingdone=()=>{fontEpoch++;requestRender()};
- FONTS.forEach(f=>{try{document.fonts.load(`20px "${f}"`)}catch(e){}})})();
+ const lf=f=>{try{document.fonts.load(`20px "${f}"`)}catch(e){}};lf(FONTS[0]);(window.requestIdleCallback||(f=>setTimeout(f,1200)))(()=>FONTS.slice(1).forEach(lf))})();
 })();
 </script>
 </body></html>
