@@ -602,7 +602,7 @@ function pressureOf(e,last,wp){const mode=S.tool==='pen'?S.pen.press:'normal';if
 function touchDraws(){return !(S.penOnly||penSeen)}
 const penBusy=()=>(live&&live.ptype==='pen')||performance.now()-lastPen<450;
 const isPalm=e=>e.width>44&&e.height>44;
-['touchstart','touchmove'].forEach(ev=>stage.addEventListener(ev,e=>{const tg=e.target;if(tg.closest&&tg.closest('.tray,.pop,#selBar,#selColors,#textEd'))return;if(e.cancelable)e.preventDefault()},{passive:false}));
+['touchstart','touchmove'].forEach(ev=>stage.addEventListener(ev,e=>{const tg=e.target;if(tg.closest&&tg.closest('.tray,.pop,#selBar,#selColors,#textEd,.floatbar,#exitFocus'))return;if(e.cancelable)e.preventDefault()},{passive:false}));
 document.addEventListener('gesturestart',e=>e.preventDefault());
 stage.addEventListener('pointerdown',e=>{
  if(e.target!==cv&&e.target!==lv&&e.target!==tp&&e.target!==stage)return;
@@ -1107,7 +1107,7 @@ async function openPlayer(recId){if(!board)return;if(recState){toast(t('recBusy'
  const first=!player;closePlayer();
  const r=await DB.asset(rec.id);if(!r||!board){toast(t('recNone'));return}
  const url=URL.createObjectURL(r.blob),audio=new Audio(url);audio.preload='auto';
- player={rec,audio,url,rate:1,iv:0};playFade={id:rec.id,ms:0};
+ player={rec,audio,url,rate:1,iv:0};audio.addEventListener('loadedmetadata',()=>{if(audio.duration===Infinity||isNaN(audio.duration)){const fix=()=>{audio.removeEventListener('durationchange',fix);audio.currentTime=0};audio.addEventListener('durationchange',fix);audio.currentTime=1e101}},{once:true});playFade={id:rec.id,ms:0};
  audio.onplay=()=>{clearInterval(player.iv);player.iv=setInterval(playTick,120);playerState()};
  audio.onpause=()=>{if(player){clearInterval(player.iv);playTick()}};
  audio.onended=()=>{if(player){playFade.ms=player.rec.dur;requestRender();playerState()}};
