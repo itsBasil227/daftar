@@ -506,9 +506,9 @@ function drawPartial(c,W,H,v,dpr,box){const m=3/v.z;let x0=box.x-m,y0=box.y-m,x1
  c.fillStyle=paperColor();c.fillRect(x0,y0,x1-x0,y1-y0);const vb={x:x0,y:y0,w:x1-x0,h:y1-y0};drawPattern(c,vb,v.z,board.meta.tpl);
  for(const o of board.objs){if(o.id===editingId||erasing.has(o.id))continue;const b=bbox(o);if(b.x>x1||b.y>y1||b.x+b.w<x0||b.y+b.h<y0)continue;drawObj(c,o)}c.restore()}
 /* ================= canvas & camera ================= */
-const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d',{desynchronized:true}),tctx=tp.getContext('2d',{desynchronized:true});
+const stage=$('#stage'),cv=$('#board'),lv=$('#live'),tp=$('#tip'),ctx=cv.getContext('2d'),lctx=lv.getContext('2d'),tctx=tp.getContext('2d');
 let W=0,H=0,DPR=1,stageRect={left:0,top:0};
-function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(3,window.devicePixelRatio||1);
+function resize(){const r=stage.getBoundingClientRect();stageRect=r;W=r.width;H=r.height;DPR=Math.min(2,window.devicePixelRatio||1);
  for(const c of[cv,lv,tp]){c.width=Math.round(W*DPR);c.height=Math.round(H*DPR)}if(live&&live.mode==='draw')live.drawn=0;layoutTray();requestRender()}
 new ResizeObserver(()=>{if(board)resize()}).observe(stage);
 const V=()=>board.view;
@@ -596,9 +596,9 @@ function recognize(P,color,size){const n=P.length/3;if(n<5)return null;const pts
 /* ================= pointer input ================= */
 const touches=new Map();let gesture=null;let spaceDown=false;let lastPen=-1e9;
 function sp(e){return{x:e.clientX-stageRect.left,y:e.clientY-stageRect.top}}
-function pressureOf(e,last,wp){const mode=S.tool==='pen'?S.pen.press:'normal';if(mode==='off')return .5;
- if(e.pointerType==='pen'&&e.pressure>0)return clamp(Math.pow(e.pressure,PRESS_GAMMA[mode]||.85)*1.12,0,1);
- if(!last)return .5;const dt=Math.max(1,e.timeStamp-last.t),v=Math.hypot(wp.x-last.x,wp.y-last.y)*V().z/dt;return clamp(.62-.13*v,.28,.75)}
+function pressureOf(e,last,wp,dms){const mode=S.tool==='pen'?S.pen.press:'normal';if(mode==='off')return .5;
+ if(e.pointerType==='pen'){if(e.pressure>0)return clamp(Math.pow(e.pressure,PRESS_GAMMA[mode]||.85)*1.12,0,1);return last?null:.5}
+ if(e.pointerType==='touch'||!last)return .5;const dt=dms||Math.max(1,e.timeStamp-last.t),v=Math.hypot(wp.x-last.x,wp.y-last.y)*V().z/dt;return clamp(.62-.13*v,.28,.75)}
 function touchDraws(){return !(S.penOnly||penSeen)}
 const penBusy=()=>(live&&live.ptype==='pen')||performance.now()-lastPen<450;
 const isPalm=e=>e.width>44&&e.height>44;
@@ -657,15 +657,15 @@ function armHold(){clearTimeout(live.hold);live.hold=setTimeout(()=>{const L=liv
  if(o.pen==='hl'){const P=o.pts;L.snap={...o,pts:[P[0],P[1],.5,P[(n-1)*3],P[(n-1)*3+1],.5]};L.snapLine=true}
  else{const s=recognize(o.pts,o.color,Math.max(1.2,o.size*.9));if(s){L.snap=s;L.snapLine=s.kind==='line'}}
  if(L.snap){clearC(lctx);requestLive()}},800)}
-function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents():[],list=co.length?co:[e];
+function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents():[],list=co.length?co:[e],fdt=clamp(e.timeStamp-(L.ft||e.timeStamp-16),4,34)/list.length;L.ft=e.timeStamp;
  for(const ev of list){const p=sp(ev),w=toWorld(p.x,p.y);
   if(L.mode==='draw'){
    if(!L.movedFar&&Math.hypot(p.x-L.sp0.x,p.y-L.sp0.y)>4){L.movedFar=true;clearTimeout(L.startHold)}
    if(L.snap){if(L.snapLine){if(L.snap.t==='shape')L.snap={...L.snap,pts:[L.snap.pts[0],L.snap.pts[1],w.x,w.y]};else L.snap={...L.snap,pts:[L.snap.pts[0],L.snap.pts[1],.5,w.x,w.y,.5]}}continue}
    const last=L.last,z=V().z;if(Math.hypot(w.x-last.x,w.y-last.y)*z<.5)continue;const P=L.obj.pts;
    if(S.tool==='hl'){if(S.hl.straight)L.obj.pts=[P[0],P[1],.5,w.x,w.y,.5];else P.push(w.x,w.y,.5)}
-   else{const st=S.pen,rawPr=pressureOf(ev,last,w),dtm=Math.max(1,ev.timeStamp-last.t),kp=Math.exp(-dtm/(6+st.smooth*.12)),pr=P[P.length-1]*kp+rawPr*(1-kp);
-    const f=L.f||(L.f={x:P[0],y:P[1],dx:0,dy:0,t:last.t}),dt=Math.max(.001,(ev.timeStamp-f.t)/1000);f.t=ev.timeStamp;
+   else{const st=S.pen,dms=ev.timeStamp-last.t>=.5?Math.min(50,ev.timeStamp-last.t):fdt,rp=pressureOf(ev,last,w,dms),rawPr=rp==null?P[P.length-1]:rp,kp=Math.exp(-dms/(6+st.smooth*.12)),pr=P[P.length-1]*kp+rawPr*(1-kp);
+    const f=L.f||(L.f={x:P[0],y:P[1],dx:0,dy:0,t:last.t}),dt=dms/1000;
     const al=fc=>1/(1+1/(2*Math.PI*fc*dt)),rdx=(w.x-f.x)/dt,rdy=(w.y-f.y)/dt,ad=al(1.2);f.dx+=(rdx-f.dx)*ad;f.dy+=(rdy-f.dy)*ad;
     const a=al(Math.max(.6,9-st.smooth*.08)+.03*Math.hypot(f.dx,f.dy)*z);f.x+=(w.x-f.x)*a;f.y+=(w.y-f.y)*a;
     const m=P.length;if(Math.hypot(f.x-P[m-3],f.y-P[m-2])*z>=.35)P.push(f.x,f.y,pr)}
@@ -675,7 +675,7 @@ function moveTool(e){const L=live,co=e.getCoalescedEvents?e.getCoalescedEvents()
   else if(L.mode==='shape'){L.obj=makeShape(S.shape.kind,L.start,w)}
   else if(L.mode==='tape'){const x=Math.min(L.start.x,w.x),y=Math.min(L.start.y,w.y);L.obj={id:'live',t:'tape',x,y,w:Math.abs(w.x-L.start.x),h:Math.abs(w.y-L.start.y),color:S.tape.color,hidden:true}}
   else if(L.mode==='laser'){laserPts.push({x:w.x,y:w.y,t:performance.now()})}}
- if(L.mode==='draw'&&!L.snap&&S.tool!=='hl'){const arr=[];if(L.rawPt)arr.push(L.rawPt);if(e.getPredictedEvents){for(const pv of e.getPredictedEvents().slice(0,2)){const q=sp(pv);arr.push(toWorld(q.x,q.y))}}L.pred=arr}
+ if(L.mode==='draw'&&!L.snap&&S.tool!=='hl'){const arr=[];if(L.rawPt)arr.push(L.rawPt);if(false){for(const pv of []){const q=sp(pv);arr.push(toWorld(q.x,q.y))}}L.pred=arr}
  requestLive()}
 function makeShape(kind,a,b){const base={id:uid(),t:'shape',kind,color:S.shape.color,size:S.shape.size/V().z};
  if(kind==='line'||kind==='arrow')return{...base,pts:[a.x,a.y,b.x,b.y]};return{...base,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
