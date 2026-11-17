@@ -523,11 +523,11 @@ function fitContent(){const bb=unionBox(board.objs);const v=V();if(!bb){v.x=-W/2
  const m=40,z=clamp(Math.min((W-2*m)/bb.w,(H-2*m-80)/bb.h),.03,2);v.z=z;v.x=bb.x+bb.w/2-W/2/z;v.y=bb.y+bb.h/2-(H-70)/2/z;requestRender();scheduleSave(false)}
 /* ================= live layer ================= */
 let live=null;
-let laserPts=[],laserRaf=0,liveRaf=0;
+let laserPts=[],laserRaf=0,liveRaf=0,liveClearTok=0,liveHold=false;
 function setT(c){const v=V();c.setTransform(DPR*v.z,0,0,DPR*v.z,-v.x*v.z*DPR,-v.y*v.z*DPR)}
 function clearC(c){c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,c.canvas.width,c.canvas.height)}
 function requestLive(){if(liveRaf)return;liveRaf=requestAnimationFrame(()=>{liveRaf=0;if(board)renderLive()})}
-function renderLive(){if(!board)return;clearC(tctx);const v=V();setT(tctx);drawZ=v.z*DPR;const L=live;
+function renderLive(){if(!board)return;if(liveHold&&!live&&!laserPts.length)return;liveHold=false;clearC(tctx);const v=V();setT(tctx);drawZ=v.z*DPR;const L=live;
  if(L){
   if(L.mode==='draw'){
    if(L.snap)drawObj(tctx,L.snap);
@@ -703,7 +703,7 @@ function clipStroke(o,cx,cy,rr){const P=o.pts,n=P.length/3,r2=rr*rr,out=[];let c
  flush();return touched?out:null}
 function endTool(e,cancelled){const L=live;live=null;clearTimeout(L.hold);clearTimeout(L.startHold);
  if(L.mode==='draw'){if(!L.snap&&L.rawPt&&L.obj.pen!=='hl'){const P=L.obj.pts,m=P.length;if(Math.hypot(L.rawPt.x-P[m-3],L.rawPt.y-P[m-2])*V().z>.3)P.push(L.rawPt.x,L.rawPt.y,P[m-1])}let o=L.snap||L.obj;if(o.t==='stroke')o={...o,id:L.snap?uid():o.id,pts:o.pts.map(v=>Math.round(v*100)/100)};
-  clearC(lctx);clearC(tctx);addObjs([o],true);setT(ctx);drawZ=V().z*DPR;drawObj(ctx,o);return}
+  addObjs([o],true);setT(ctx);drawZ=V().z*DPR;drawObj(ctx,o);if(o.pen==='hl'||o.t!=='stroke'){clearC(lctx);clearC(tctx)}else{const tk=++liveClearTok;liveHold=true;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(tk!==liveClearTok)return;if(!(live&&live.mode==='draw'))clearC(lctx);if(!live){liveHold=false;clearC(tctx)}}))}return}
  clearC(tctx);
  if(L.mode==='erase'){if(!commitPartErase(L)){if(erasing.size){const ids=[...erasing];erasing.clear();delIds(ids)}else requestRender()}return}
  if(cancelled){requestRender();return}
